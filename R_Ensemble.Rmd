@@ -1,0 +1,126 @@
+---
+title: |
+  | BUAN6356 
+  | Ensemble Notebook
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    theme: cerulean
+---
+
+## Ensemble Methods using Boston Housing data    
+  
+```{r loadpackages, warning=FALSE, message=FALSE}
+pacman::p_load(ISLR, MASS, rpart, rpart.plot, caret,
+               randomForest, gbm, tree)
+theme_set(theme_classic())
+```
+  
+\  
+
+__1. Fitting Regression Trees__
+_Using TREE package_  
+```{r regressionTree}
+set.seed(42)
+train <- sample(1:nrow(Boston), nrow(Boston)/2)
+
+tree.boston <- tree(medv~., Boston, subset = train)
+summary(tree.boston)
+
+plot(tree.boston)
+text(tree.boston, pretty = 0)
+
+
+# Will pruning improve performance?
+  # use cross-validation
+cv.boston <- cv.tree(tree.boston)
+plot(cv.boston$size,cv.boston$dev,type = 'b')
+
+prune.boston <- prune.tree(tree.boston,best=5)
+plot(prune.boston)
+text(prune.boston, pretty = 0)
+
+
+
+yhat <- predict(tree.boston,newdata=Boston[-train,])
+boston.test <- Boston[-train, "medv"]
+plot(yhat,boston.test)
+abline(0,1)
+mean((yhat-boston.test)^2)
+```
+
+\newpage    
+__Bagging and Random Forests__   
+_Using randomForest packate_   
+```{r randomForest}
+#library(randomForest)
+
+#Bagging
+set.seed(42)
+bag.boston1 <- randomForest(medv~., data=Boston, subset=train,
+                           mtry = 13, importance = TRUE)  # mtry: number of predictors
+
+bag.boston1
+
+yhat.bag <- predict(bag.boston1, newdata=Boston[-train,])
+plot(yhat.bag, boston.test)
+abline(0,1)
+mean((yhat.bag-boston.test)^2)
+
+
+bag.boston2 <- randomForest(medv~., data=Boston, subset=train, 
+                            mtry = 13, ntree = 25)
+yhat.bag <- predict(bag.boston2, newdata=Boston[-train,])
+mean((yhat.bag-boston.test)^2)
+
+
+
+
+#Random Forest (choose a smaller number of predictors)
+set.seed(42)
+rf.boston1 <- randomForest(medv~., data = Boston, subset = train, 
+                          mtry = 6, importance = TRUE)
+
+yhat.rf <- predict(rf.boston1, newdata = Boston[-train,])
+mean((yhat.rf-boston.test)^2)
+  
+  # variable importance
+importance(rf.boston1)
+varImpPlot(rf.boston1)
+
+```
+
+
+\newpage  
+__Boosting__    
+_Using gbm package_  
+```{r Boosting}
+#library(gbm)
+
+set.seed(42)
+boost.boston1 <- gbm(medv~., data=Boston[train,], distribution = "gaussian", 
+                    n.trees=5000, interaction.depth = 4)
+summary(boost.boston1)
+
+  # partial dependent plots - marginal effects, after excluding the influence other variables
+par(mfrow=c(1,2))
+plot(boost.boston1,i = "rm")
+plot(boost.boston1,i = "lstat")
+
+yhat.boost1 <- predict(boost.boston1, newdata=Boston[-train,], 
+                      n.trees=5000)
+mean((yhat.boost1-boston.test)^2)
+
+
+# Choose a value of shrinkage parameter lambda (default value = 0.001)
+boost.boston2<-gbm(medv~.,data = Boston[train,], distribution = "gaussian", 
+                  n.trees = 5000, interaction.depth = 4, 
+                  shrinkage = 0.2, verbose = F)
+
+yhat.boost2 <-predict(boost.boston2, newdata = Boston[-train,], 
+                     n.trees = 5000)
+mean((yhat.boost2-boston.test)^2)
+```
+
+
